@@ -1,12 +1,375 @@
-import {useEffect,useMemo,useState} from 'react';import {uid,toMarkdown,csv} from './logic';import './styles.css';
-const cfg={"slug":"survey-studio","name":"Survey Studio","purpose":"Build local surveys, preview them, collect responses locally, and review summaries.","kind":"survey","fields":["Question","question type","options","required","help text"],"accent":"fuchsia"} as const;const pages=[['home','Home'],['workspace','Builder'],['guide','Preview'],['examples','Response analysis'],['reference','Question guide'],['help','Limitations']] as const;type Page=typeof pages[number][0];type Item={id:string;title:string;createdAt:string;[key:string]:string};const key='local-portfolio:'+cfg.slug;const makeDemo=():Item[]=>['Field note — Alder','Follow-up — Miro','Review — Sol','Plan — Juniper','Archive — Nia','Decision — Rowan','Reminder — Theo','Research — Imani','Checklist — Ellis','Exception — Saffron'].map((title,i)=>({id:'demo-'+i,title,createdAt:new Date(Date.now()-i*86400000).toISOString(),[cfg.fields[1]]:['In focus','Scheduled','Reviewed','Waiting','Reference'][i%5],[cfg.fields[2]]:['Ready','Needs review','Complete','Paused','Archived'][i%5],[cfg.fields[3]]:new Date(Date.now()+(i-3)*86400000).toISOString().slice(0,10),[cfg.fields[4]]:i===4?'A longer fictional note showing a realistic exception, the decision taken, and what should be checked before the record is used again.':'Fictional demo data for a populated local workspace.'}));function download(n:string,s:string,t='text/plain'){const x=document.createElement('a');x.href=URL.createObjectURL(new Blob([s],{type:t}));x.download=n;x.click();URL.revokeObjectURL(x.href)}
-export default function App(){const requested=location.hash.slice(1);const [page,setPage]=useState<Page|'notfound'>(()=>pages.some(([id])=>id===requested)?requested as Page:requested?'notfound':'home');const [records,setRecords]=useState<Item[]>(()=>{try{return JSON.parse(localStorage.getItem(key)||'null')||makeDemo()}catch{return makeDemo()}});const [form,setForm]=useState<Record<string,string>>({});const [query,setQuery]=useState('');const [notice,setNotice]=useState('');const [answer,setAnswer]=useState('');const [editing,setEditing]=useState<Item|null>(null);useEffect(()=>{document.title=(page==='home'?cfg.name:page==='notfound'?'Page not found':cfg.name+' — '+page);if(page!=='notfound')location.hash=page},[page]);const save=(x:Item[])=>{setRecords(x);localStorage.setItem(key,JSON.stringify(x))};const filtered=useMemo(()=>records.filter(r=>JSON.stringify(r).toLowerCase().includes(query.toLowerCase())),[records,query]);const add=(ev:React.FormEvent)=>{ev.preventDefault();const title=form[cfg.fields[0]]?.trim();if(!title){setNotice('Add a '+cfg.fields[0].toLowerCase()+' before saving.');return}const next={id:editing?.id||uid(),title,createdAt:editing?.createdAt||new Date().toISOString()} as Item;cfg.fields.forEach(f=>next[f]=form[f]||'');save(editing?records.map(r=>r.id===editing.id?next:r):[next,...records]);setForm({});setEditing(null);setNotice(editing?'Record updated locally.':'Saved locally. You can now find it in the archive or export it.')};const importJson=async(file?:File)=>{if(!file)return;try{const parsed=JSON.parse(await file.text());if(!Array.isArray(parsed)||!parsed.every(x=>x&&typeof x.title==='string'))throw new Error();save(parsed);setNotice('Imported '+parsed.length+' records into this browser.')}catch{setNotice('That file is not a valid export. Your existing records were left unchanged.')}};return <div className={'app '+cfg.accent}><div className="shell"><header><div className="brand"><small>LOCAL EDITION</small>{cfg.name}</div><nav aria-label="Primary">{pages.map(([id,label])=><button className={page===id?'active':''} key={id} onClick={()=>setPage(id)}>{label}</button>)}</nav></header>{page==='home'&&<Home records={records} open={()=>setPage('workspace')}/>} {page==='workspace'&&<Workspace/>}{page==='notfound'&&<NotFound/>}{page==='guide'&&<Guide title="Preview"/>}{page==='examples'&&<Examples/>}{page==='reference'&&<Reference/>}{page==='help'&&<Help/>}</div></div>;
-function Home({records,open}:{records:Item[];open:()=>void}){return <><section className="hero"><div><p className="eyebrow">A CLEARER WAY TO WORK LOCALLY</p><h1>Survey Studio keeps the important details <i>findable.</i></h1><p>A local survey builder makes it possible to test wording and response flow before collecting anything elsewhere.</p><div className="actions"><button className="primary" onClick={open}>Open builder</button><button onClick={()=>download(cfg.slug+'-demo.md',toMarkdown(cfg.name,records))}>Export demo</button></div></div><aside className="preview"><div className="preview-head">LIVE SAMPLE <span>● DEMO DATA</span></div><div className="preview-title">What is ready today</div>{records.slice(0,3).map((r,i)=><div className="peek" key={r.id}><div><b>{r.title}</b><br/><small>{r[cfg.fields[1]]}</small></div><span>{i===0?'NOW':'SAVED'}</span></div>)}<div className="preview-foot">No account. No sync. Export when you choose.</div></aside></section><section className="section"><p className="eyebrow">01 / FIRST RECORD</p><h2>Begin with a record you will need again.</h2><p>Add a question, preview the respondent view, submit a local response, and read the summary.</p><div className="card-grid"><div className="info-card"><strong>1. Name the detail</strong><p>Use the first field for the thing you will search for later, rather than a vague catch-all.</p></div><div className="info-card"><strong>2. Add context</strong><p>Record the practical facts beside it: status, timing, and the note that explains the decision.</p></div><div className="info-card"><strong>3. Review deliberately</strong><p>Search your local history, export when needed, and remove data that is no longer useful.</p></div></div></section><section className="section story"><p className="eyebrow">02 / WHY THIS RECORD EXISTS</p><h2>Small details are where useful decisions begin.</h2><p>{cfg.purpose} This is deliberately a local record rather than a social feed, an account portal, or an automated recommendation. It gives you a calm place to capture the exact fact, its context, and the practical next question while you still remember why it matters.</p><p>Every entry is searchable by the words you wrote. Use concise fields for things you expect to compare later, then use the note for nuance: an exception, an uncertainty, or the reason a future version of you should pause before acting.</p></section><section className="section"><p className="eyebrow">03 / THE CURRENT DESK</p><h2>Ten examples, clearly fictional.</h2><p>The first records are labelled demo data. They exist to demonstrate active, scheduled, reviewed, and archived states—never to imply real people, transactions, outcomes, or activity.</p><div className="card-grid">{records.slice(0,6).map((r,i)=><div className="info-card" key={r.id}><strong>{String(i+1).padStart(2,'0')} · {r.title}</strong><p>{r[cfg.fields[1]]} · {r[cfg.fields[2]]}<br/>{r[cfg.fields[4]]}</p></div>)}</div></section><section className="section"><p className="eyebrow">04 / A PRACTICAL LOOP</p><h2>Capture. Review. Carry forward.</h2><div className="card-grid"><div className="info-card"><strong>Capture</strong><p>Open the workspace when the detail is fresh. The required title prevents a record that cannot be found later.</p></div><div className="info-card"><strong>Review</strong><p>Search by a name, category, status, or note. Empty results are an invitation to change the query, not a dead end.</p></div><div className="info-card"><strong>Carry forward</strong><p>Export a Markdown or CSV copy before a handoff, a planning session, or a browser reset. Local data is yours to move.</p></div></div></section><section className="section"><p className="eyebrow">05 / WHAT THE TOOL DOES NOT DO</p><h2>Clear boundaries are part of the design.</h2><p>This app does not silently synchronize, infer facts, send reminders, or make a recommendation for you. Dates, labels, financial figures, health-related notes, disposal guidance, and any decisions based on them depend entirely on the information you enter and the context you verify.</p></section><section className="section"><p className="eyebrow">06 / KEEP A PORTABLE COPY</p><h2>Local-first should never mean trapped.</h2><p>Use JSON import and export for a browser-local backup, or CSV and Markdown when you need a readable copy. Imported JSON replaces the current local collection only after the file is successfully parsed; malformed files leave the saved records unchanged and show a clear error.</p></section><section className="section"><p className="eyebrow">07 / CONTINUE IN THE TOOL</p><h2>Use the real workspace, not a mock-up.</h2><p>The preview above is built from the same saved records used in the workspace. Open it to add, edit, remove, filter, import, and export local data.</p><div className="actions"><button className="primary" onClick={open}>Open workspace</button></div></section><footer className="section footer"><p className="eyebrow">08 / LOCAL PROJECT NOTES</p><p>This product stores its data in the active browser profile. Read the guide and limitations before relying on it for a consequential decision.</p></footer></>}
-function Workspace(){return <section className="workspace"><div className="toolbar"><input aria-label="Search records" value={query} onChange={e=>setQuery(e.target.value)} placeholder={'Search '+cfg.name}/><button onClick={()=>download(cfg.slug+'.md',toMarkdown(cfg.name,records))}>Export Markdown</button><button onClick={()=>download(cfg.slug+'.csv',csv(records),'text/csv')}>Export CSV</button><button onClick={()=>download(cfg.slug+'.json',JSON.stringify(records,null,2),'application/json')}>Export JSON</button><label className="import">Import JSON<input type="file" accept="application/json" onChange={e=>importJson(e.target.files?.[0])}/></label></div><div className="grid"><form onSubmit={add}><h2>Add survey</h2>{cfg.fields.map((f,i)=><label key={f}>{f}<input required={i===0} value={form[f]||''} onChange={e=>setForm({...form,[f]:e.target.value})} placeholder={'Enter '+f.toLowerCase()}/></label>)}<button className="primary">{editing?'Save changes':'Save record'}</button>{editing&&<button type="button" onClick={()=>{setEditing(null);setForm({})}}>Cancel edit</button>}{notice&&<p className="notice" role="status">{notice}</p>}</form><article className="records"><h2>{filtered.length} records</h2>{filtered.length===0?<p className="empty">No records match that search. Clear the search or create the first local record.</p>:filtered.map(r=><section className="card" key={r.id}><div><h3>{r.title}</h3>{cfg.fields.slice(1).map(f=><p key={f}><b>{f}</b> {r[f]||'—'}</p>)}</div><div><button onClick={()=>{setEditing(r);const values:Record<string,string>={};cfg.fields.forEach(f=>values[f]=r[f]||'');setForm(values);window.scrollTo({top:0,behavior:'smooth'})}}>Edit</button><button onClick={()=>{save(records.filter(x=>x.id!==r.id));setNotice('Record removed from this browser.')}}>Delete</button></div></section>)}</article></div><Special/></section>}
-function NotFound(){return <section className="section"><p className="eyebrow">404 / LOCAL ROUTE</p><h2>That page is not in this edition.</h2><p>Use the navigation to return to a known section.</p><button className="primary" onClick={()=>setPage('home')}>Return home</button></section>}
-function Guide({title}:{title:string}){return <Content kicker="02 / FIELD GUIDE" title={title} body="question, response, required, summary are the working vocabulary in this tool. The guide does not prescribe a single right process; it explains what each field records, why it is there, and how to keep the record useful over time." cards={[['Use plain language','Write the term that a future version of you will recognise quickly.'],['Keep dates practical','Use a date only when it helps you decide what to do or review next.'],['Separate facts from notes','Use short fields for filtering and the note for the detail that does not fit a label.']]}/>}
-function Examples(){return <Content kicker="03 / WORKED EXAMPLES" title="A record with enough context." body="The sample records are fictional and labelled as demo data. They show the difference between a title that can be found, structured fields that can be scanned, and a note that preserves the reason behind a decision." cards={[['A current item','Marked In focus, with a near date and a concise note.'],['A scheduled item','Has a future date so it appears when you are planning ahead.'],['An edge case','Uses a longer note to prove that more context remains readable.']]}/>}
-function Reference(){return <Content kicker="04 / METHOD" title="How this local tool handles information." body="Survey Studio stores records in this browser using localStorage. Search runs against the saved local data. Markdown and CSV exports are created in your browser. There is no account, server synchronization, automatic backup, or claim that this record is authoritative outside the information you enter." cards={[['Local first','Your records remain in the active browser profile until you export or remove them.'],['Simple exports','Exports are designed to be readable and portable, not a full database backup format.'],['Human review','Dates, amounts, labels, and reminders depend on the data you enter and should be checked before acting.']]}/>}
-function Help(){return <section className="section"><p className="eyebrow">05 / HELP & LIMITS</p><h2>Useful boundaries make a tool more trustworthy.</h2><div className="faq"><details open><summary>Where is my data stored?</summary><p>In localStorage for this browser profile. Clearing browser data may remove it; use an export for a copy you control.</p></details><details><summary>Is the demo data real?</summary><p>No. It is fictional sample material designed to show populated, long-text, status, and archive states.</p></details><details><summary>What happens when a form is incomplete?</summary><p>The first field is required. The form gives a plain-language message and keeps the entered values available to correct.</p></details><details><summary>Can this replace specialist advice?</summary><p>No. It is a personal organization aid. The limitations and relevant disclaimers should guide how you use the records.</p></details></div></section>}
-function Content({kicker,title,body,cards}:{kicker:string;title:string;body:string;cards:string[][]}){return <section className="section"><p className="eyebrow">{kicker}</p><h2>{title}</h2><p>{body}</p><div className="card-grid">{cards.map(c=><div className="info-card" key={c[0]}><strong>{c[0]}</strong><p>{c[1]}</p></div>)}</div></section>}
-function Special(){if((cfg.kind as string)==='algorithm')return <section className="lab"><h2>Visible operations</h2><p>Use these controls to see an ordered set change. They are deliberately small: the explanation matters more than spectacle.</p><button onClick={()=>setAnswer('Values sorted: 4, 7, 12, 19')}>Sort sample</button><button onClick={()=>setAnswer('One comparison explained: 12 is greater than 7, so it moves after 7.')}>Explain step</button><p role="status">{answer}</p></section>;if((cfg.kind as string)==='garden')return <section className="lab"><h2>Bed grid</h2><div className="bed">{Array.from({length:12},(_,i)=><button key={i} onClick={()=>setAnswer('Plant marker placed in bed cell '+(i+1))}>{answer.includes(String(i+1))?'●':'+'}</button>)}</div><p role="status">{answer||'Select a cell to place a marker.'}</p></section>;return <section className="lab"><h2>Practice note</h2><p>Use this local workspace with the guide alongside it. A good record is specific enough to help later and short enough to keep current.</p></section>}}
+import { useState, type ReactNode } from 'react';
+import { DemoTag, EmptyState, Field, Landing, NotFound, Notice, PageHead, Shell, downloadText, uid, useFlash, usePersistentState, useRoute } from './shared/ui';
+import { toCSV } from './shared/csv';
+import { addDays, formatDay, todayISO } from './shared/dates';
+import { KINDS, KIND_LABEL, completion, hasChoices, moveQuestion, responseRows, summarize, validateQuestion, validateResponse, type Answer, type Kind, type Question, type Response, type Summary, type Survey } from './lib/survey';
+
+const KEY = 'survey-studio:store';
+const NAV = [
+  { to: '/', label: 'Overview' },
+  { to: '/surveys', label: 'Surveys' },
+];
+
+interface Store {
+  surveys: Survey[];
+  responses: Response[];
+}
+
+const qn = (kind: Kind, title: string, p: Partial<Question> = {}): Question => ({ id: uid('q'), kind, title, help: '', required: false, choices: [], max: 0, ...p });
+
+export function demoStore(): Store {
+  const qs = [
+    qn('rating', 'How useful was the workshop overall?', { required: true }),
+    qn('single', 'Which session did you find most valuable?', { required: true, choices: ['Planning with constraints', 'Accessible design reviews', 'Writing clear briefs', 'Hands-on prototyping'] }),
+    qn('multi', 'Which follow-up formats would you use?', { help: 'Choose up to two.', choices: ['Recorded videos', 'Written guides', 'Office hours', 'Community chat'], max: 2 }),
+    qn('nps', 'How likely are you to recommend the workshop to a colleague?', { required: true }),
+    qn('yesno', 'Would you attend a follow-up session?'),
+    qn('long', 'What should we change next time?', { help: 'Optional — anything is helpful.' }),
+  ];
+  const survey: Survey = { id: 'demo-workshop', title: 'Workshop feedback', intro: 'Thanks for coming. This takes about two minutes and is anonymous.', questions: qs, open: true, demo: true };
+  const texts = ['More time for the prototyping session, please.', 'Shorter breaks and a printed agenda.', '', 'The accessibility review was eye-opening — more examples would help.', '', 'Room was too warm in the afternoon.', '', 'Share the slides before the session.', '', '', 'A follow-up for managers would be useful.', ''];
+  const responses: Response[] = texts.map((t, i) => ({
+    id: `demo-r${i}`,
+    surveyId: survey.id,
+    at: `${addDays(todayISO(), -12 + i)}T${String(9 + (i % 8)).padStart(2, '0')}:15:00Z`,
+    answers: {
+      [qs[0].id]: [5, 4, 4, 5, 3, 4, 5, 2, 4, 5, 4, 4][i],
+      [qs[1].id]: qs[1].choices[[3, 1, 3, 1, 0, 2, 3, 1, 3, 0, 1, 3][i]],
+      [qs[2].id]: [['Written guides', 'Office hours'], ['Recorded videos'], [], ['Written guides'], ['Office hours', 'Community chat'], ['Recorded videos', 'Written guides'], ['Written guides'], [], ['Office hours'], ['Written guides', 'Recorded videos'], ['Community chat'], ['Written guides']][i],
+      [qs[3].id]: [10, 8, 9, 10, 6, 7, 9, 3, 8, 10, 9, 7][i],
+      [qs[4].id]: i % 4 === 3 ? 'No' : i === 6 ? null : 'Yes',
+      [qs[5].id]: t || null,
+    },
+    demo: true,
+  }));
+  const draft: Survey = { id: 'demo-draft', title: 'Office move: what matters to you?', intro: 'Help us plan the new space.', questions: [qn('multi', 'What do you need most at your desk?', { choices: ['Second monitor', 'Standing desk', 'Quiet', 'Natural light'], max: 2 }), qn('short', 'Anything else?')], open: false, demo: true };
+  return { surveys: [survey, draft], responses };
+}
+
+export default function App() {
+  const [route, navigate] = useRoute();
+  const [store, setStore] = usePersistentState<Store>(KEY, demoStore);
+  const ctx = { store, setStore, navigate };
+  const m = route.match(/^\/survey\/([^/]+)\/(build|take|results|thanks)(\?preview)?$/);
+  let page: ReactNode;
+  if (route === '/') page = <Home />;
+  else if (route === '/surveys') page = <Surveys {...ctx} />;
+  else if (m?.[2] === 'build') page = <Builder {...ctx} id={m[1]} />;
+  else if (m?.[2] === 'take') page = <Take {...ctx} id={m[1]} />;
+  else if (m?.[2] === 'thanks') page = <Thanks {...ctx} id={m[1]} preview={!!m[3]} />;
+  else if (m?.[2] === 'results') page = <Results {...ctx} id={m[1]} />;
+  else page = <NotFound />;
+  return (
+    <Shell name="Survey Studio" wordmark={['Survey', 'Studio']} nav={NAV} route={route} cta={{ to: '/surveys', label: 'New survey' }} footerNote="Responses are collected in this browser only — ideal for a shared kiosk, a workshop laptop or testing a survey before you send it.">
+      {page}
+    </Shell>
+  );
+}
+
+type Ctx = { store: Store; setStore: (s: Store) => void; navigate: (to: string) => void };
+
+/* ---------- Charts ---------- */
+function SummaryView({ q, s, compact }: { q: Question; s: Summary; compact?: boolean }) {
+  if (s.kind === 'choices') {
+    const max = Math.max(1, ...s.options.map((o) => o.count));
+    return (
+      <ul className="hbars" aria-label={`${q.title}: ${s.options.map((o) => `${o.label} ${o.count}`).join(', ')}`}>
+        {s.options.map((o, i) => (
+          <li key={o.label} style={{ ['--i' as string]: i }} title={`${o.label}: ${o.count} (${o.pct}%)`}>
+            <span className="hb-label">{o.label}</span>
+            <span className="hb-track"><span style={{ width: `${(o.count / max) * 100}%` }} /></span>
+            <span className="hb-num mono">{o.count}{!compact && <small> · {o.pct}%</small>}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (s.kind === 'scale' || s.kind === 'nps') {
+    const max = Math.max(1, ...s.dist.map((d) => d.count));
+    const color = (v: number) => (s.kind === 'nps' ? (v >= 9 ? 'var(--ok)' : v <= 6 ? 'var(--err)' : 'var(--warn)') : 'var(--accent)');
+    return (
+      <div className="scale">
+        <div className="scale-head">
+          {s.kind === 'scale' ? <><b className="big">{s.average ?? '—'}</b><span className="small muted">average out of 5 · {s.answered} answers</span></> : <><b className="big">{s.score == null ? '—' : s.score > 0 ? `+${s.score}` : s.score}</b><span className="small muted">NPS · {s.promoters} promoters, {s.passives} passives, {s.detractors} detractors</span></>}
+        </div>
+        <div className="cols" role="img" aria-label={`Distribution: ${s.dist.map((d) => `${d.value}: ${d.count}`).join(', ')}`}>
+          {s.dist.map((d) => (
+            <div key={d.value} className="col-wrap" title={`${d.value}: ${d.count} response${d.count === 1 ? '' : 's'}`}>
+              <span className="col-n small">{d.count || ''}</span>
+              <span className="col" style={{ height: `${(d.count / max) * 100}%`, background: color(d.value) }} />
+              <span className="col-l mono">{d.value}</span>
+            </div>
+          ))}
+        </div>
+        {s.kind === 'nps' && !compact && <p className="legend"><span><i style={{ background: 'var(--err)' }} />0–6 detractors</span><span><i style={{ background: 'var(--warn)' }} />7–8 passives</span><span><i style={{ background: 'var(--ok)' }} />9–10 promoters</span><span className="muted">· NPS = % promoters − % detractors</span></p>}
+      </div>
+    );
+  }
+  return s.answers.length === 0 ? <p className="muted small">No written answers yet.</p> : (
+    <ul className="quotes">{s.answers.slice(0, compact ? 2 : 50).map((a, i) => <li key={i}><q>{a.text}</q><span className="small muted">{formatDay(a.at.slice(0, 10), { day: 'numeric', month: 'short' })}</span></li>)}</ul>
+  );
+}
+
+function HeroPreview() {
+  const s = demoStore();
+  const survey = s.surveys[0];
+  return (
+    <div className="hero-ss">
+      <div className="row-between"><strong className="hero-ss-title">{survey.title}</strong><span className="small muted">{s.responses.length} responses</span></div>
+      <div className="hero-ss-grid">
+        <div><p className="eyebrow">{survey.questions[3].title.slice(0, 40)}…</p><SummaryView q={survey.questions[3]} s={summarize(survey.questions[3], s.responses)} compact /></div>
+        <div><p className="eyebrow">Most valuable session</p><SummaryView q={survey.questions[1]} s={summarize(survey.questions[1], s.responses)} compact /></div>
+      </div>
+    </div>
+  );
+}
+
+function Home() {
+  return (
+    <Landing
+      eyebrow="Survey builder"
+      title={<>Ask better questions. <em>Read the answers.</em></>}
+      lead="Build a short survey from seven question types, take it on this device, and see the results summarised the moment answers come in — averages, distributions, NPS and every written comment."
+      primary={{ href: '#/surveys', label: 'Open your surveys' }}
+      secondary={{ href: '#/survey/demo-workshop/results', label: 'See demo results' }}
+      previewLabel="Workshop feedback — demo responses"
+      preview={<HeroPreview />}
+      steps={[
+        { title: 'Build', body: 'Add questions — short and long text, single choice, checkboxes, 1–5 rating, 0–10 likelihood, yes/no — and mark the essentials as required.' },
+        { title: 'Collect', body: 'Open the survey on a laptop at the door of an event or pass a tablet round. Answers are checked before they’re saved.' },
+        { title: 'Understand', body: 'Each question gets the right summary, with labelled charts. Export every response as CSV.' },
+      ]}
+      stepsIntro="Survey Studio opens with a labelled demo survey and twelve fictional responses, plus a draft to edit."
+      features={[
+        { title: 'Seven question types', body: 'Including checkboxes with a selection limit and a 0–10 likelihood scale.' },
+        { title: 'Friendly validation', body: 'Required answers and limits are checked with clear messages next to the question.' },
+        { title: 'Honest summaries', body: 'Checkbox percentages are of respondents; NPS shows promoters, passives and detractors.' },
+        { title: 'Spreadsheet-ready', body: 'One row per response, one column per question, in CSV.' },
+      ]}
+      note="Survey Studio collects responses on the device it’s open on. It isn’t an online form service — there’s no link to send to other people."
+      closing={{ title: <>Five questions <em>are usually enough.</em></>, action: { href: '#/surveys', label: 'Build a survey' } }}
+    />
+  );
+}
+
+/* ---------- Surveys list ---------- */
+function Surveys({ store, setStore, navigate }: Ctx) {
+  const [title, setTitle] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [flash, setFlash] = useFlash();
+  function create(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return setErr('Give the survey a title.');
+    const id = uid('survey');
+    setStore({ ...store, surveys: [...store.surveys, { id, title: title.trim(), intro: '', questions: [qn('rating', 'How satisfied are you overall?', { required: true })], open: false }] });
+    navigate(`/survey/${id}/build`);
+  }
+  return (
+    <div className="stack">
+      <PageHead eyebrow="Surveys" title={<>Your <em>surveys.</em></>} />
+      {flash && <Notice kind={flash.kind} onDismiss={() => setFlash(null)}>{flash.text}</Notice>}
+      <form className="card filters" onSubmit={create} noValidate>
+        <Field label="New survey title" className="grow" error={err}>{(p) => <input {...p} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Team offsite feedback" />}</Field>
+        <button className="btn btn-primary" type="submit">Create survey</button>
+      </form>
+      {store.surveys.length === 0 ? <EmptyState title="No surveys yet" actions={<button type="button" className="btn" onClick={() => setStore(demoStore())}>Load demo survey</button>}>Create one above.</EmptyState> : (
+        <div className="grid-2">
+          {store.surveys.map((s, i) => {
+            const n = store.responses.filter((r) => r.surveyId === s.id).length;
+            return (
+              <article key={s.id} className="card stack survey-card" data-reveal style={{ ['--i' as string]: i }}>
+                <div className="card-title-row"><h2 className="h3">{s.title}</h2><span className={`badge ${s.open ? 'badge-ok' : ''}`}>{s.open ? 'Open' : 'Draft'}</span></div>
+                <p className="small muted">{s.questions.length} question{s.questions.length === 1 ? '' : 's'} · {n} response{n === 1 ? '' : 's'}{s.demo && <> · <DemoTag /></>}</p>
+                <div className="row">
+                  <a className="btn btn-sm" href={`#/survey/${s.id}/build`}>Edit</a>
+                  <a className="btn btn-sm" href={`#/survey/${s.id}/take`}>{s.open ? 'Take survey' : 'Preview'}</a>
+                  <a className="btn btn-sm btn-primary" href={`#/survey/${s.id}/results`}>Results</a>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+      {store.surveys.some((s) => s.demo) && <div><button type="button" className="btn btn-ghost btn-sm" onClick={() => { const ids = new Set(store.surveys.filter((s) => s.demo).map((s) => s.id)); setStore({ surveys: store.surveys.filter((s) => !s.demo), responses: store.responses.filter((r) => !ids.has(r.surveyId)) }); setFlash({ kind: 'success', text: 'Demo surveys removed.' }); }}>Clear demo surveys</button></div>}
+    </div>
+  );
+}
+
+/* ---------- Builder ---------- */
+function Builder({ store, setStore, navigate, id }: Ctx & { id: string }) {
+  const s = store.surveys.find((x) => x.id === id);
+  const [flash, setFlash] = useFlash();
+  const [checked, setChecked] = useState(false);
+  if (!s) return <EmptyState title="Survey not found" actions={<a className="btn btn-primary" href="#/surveys">Back</a>} />;
+  const update = (patch: Partial<Survey>) => setStore({ ...store, surveys: store.surveys.map((x) => (x.id === s.id ? { ...x, ...patch } : x)) });
+  const setQ = (qid: string, patch: Partial<Question>) => update({ questions: s.questions.map((q) => (q.id === qid ? { ...q, ...patch } : q)) });
+  const errors = Object.fromEntries(s.questions.map((q) => [q.id, validateQuestion(q)]).filter(([, e]) => e));
+  const hasResponses = store.responses.some((r) => r.surveyId === s.id);
+  function publish() {
+    setChecked(true);
+    if (!s!.title.trim() || Object.keys(errors).length || !s!.questions.length) return setFlash({ kind: 'error', text: 'Fix the highlighted questions before opening the survey.' });
+    update({ open: true });
+    setFlash({ kind: 'success', text: 'Survey is open for responses.' });
+  }
+  return (
+    <div className="stack">
+      <PageHead eyebrow={<><a href="#/surveys">Surveys</a> / {s.open ? 'Open' : 'Draft'}</>} title={<>Build <em>{s.title || 'survey'}</em></>}
+        actions={<><a className="btn" href={`#/survey/${s.id}/take`}>Preview</a>{s.open ? <button type="button" className="btn" onClick={() => update({ open: false })}>Close survey</button> : <button type="button" className="btn btn-primary" onClick={publish}>Open for responses</button>}<button type="button" className="btn btn-danger" onClick={() => { if (window.confirm(`Delete “${s.title}” and its responses?`)) { setStore({ surveys: store.surveys.filter((x) => x.id !== s.id), responses: store.responses.filter((r) => r.surveyId !== s.id) }); navigate('/surveys'); } }}>Delete</button></>} />
+      {flash && <Notice kind={flash.kind} onDismiss={() => setFlash(null)}>{flash.text}</Notice>}
+      {hasResponses && <Notice kind="info">This survey already has responses. Changing options can make earlier answers harder to compare.</Notice>}
+      <div className="card stack">
+        <Field label="Survey title">{(p) => <input {...p} value={s.title} onChange={(e) => update({ title: e.target.value })} />}</Field>
+        <Field label="Introduction" hint="Shown above the first question">{(p) => <textarea {...p} rows={2} value={s.intro} onChange={(e) => update({ intro: e.target.value })} />}</Field>
+      </div>
+      <ol className="q-list">
+        {s.questions.map((q, i) => (
+          <li key={q.id} className="card stack q-card">
+            <div className="card-title-row">
+              <span className="label-mono">Question {i + 1} · {KIND_LABEL[q.kind]}</span>
+              <span className="row nowrap">
+                <button type="button" className="icon-btn" aria-label={`Move question ${i + 1} up`} disabled={i === 0} onClick={() => update({ questions: moveQuestion(s.questions, i, -1) })}>↑</button>
+                <button type="button" className="icon-btn" aria-label={`Move question ${i + 1} down`} disabled={i === s.questions.length - 1} onClick={() => update({ questions: moveQuestion(s.questions, i, 1) })}>↓</button>
+                <button type="button" className="icon-btn" aria-label={`Delete question ${i + 1}`} onClick={() => update({ questions: s.questions.filter((x) => x.id !== q.id) })}>✕</button>
+              </span>
+            </div>
+            {checked && errors[q.id] && <p className="error-text" role="alert">{errors[q.id]}</p>}
+            <div className="form-grid">
+              <Field label={`Question ${i + 1} text`} className="span-2">{(p) => <input {...p} value={q.title} onChange={(e) => setQ(q.id, { title: e.target.value })} />}</Field>
+              <Field label="Type">{(p) => <select {...p} value={q.kind} onChange={(e) => { const k = e.target.value as Kind; setQ(q.id, { kind: k, choices: hasChoices(k) && q.choices.length < 2 ? ['Option 1', 'Option 2'] : q.choices }); }}>{KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select>}</Field>
+            </div>
+            <Field label="Help text" hint="Optional">{(p) => <input {...p} value={q.help} onChange={(e) => setQ(q.id, { help: e.target.value })} />}</Field>
+            {hasChoices(q.kind) && (
+              <fieldset className="stack">
+                <legend className="label">Options</legend>
+                {q.choices.map((c, ci) => (
+                  <div key={ci} className="row nowrap opt-row">
+                    <label className="sr-only" htmlFor={`${q.id}-c${ci}`}>Option {ci + 1}</label>
+                    <input id={`${q.id}-c${ci}`} value={c} onChange={(e) => setQ(q.id, { choices: q.choices.map((x, j) => (j === ci ? e.target.value : x)) })} />
+                    <button type="button" className="icon-btn" aria-label={`Remove option ${ci + 1}`} onClick={() => setQ(q.id, { choices: q.choices.filter((_, j) => j !== ci) })}>✕</button>
+                  </div>
+                ))}
+                <div className="row">
+                  <button type="button" className="btn btn-sm" onClick={() => setQ(q.id, { choices: [...q.choices, `Option ${q.choices.length + 1}`] })}>+ Add option</button>
+                  {q.kind === 'multi' && <Field label="Max selections" hint="0 = no limit">{(p) => <input {...p} inputMode="numeric" style={{ maxWidth: 90 }} value={q.max} onChange={(e) => setQ(q.id, { max: Number(e.target.value) || 0 })} />}</Field>}
+                </div>
+              </fieldset>
+            )}
+            <label className="check"><input type="checkbox" checked={q.required} onChange={(e) => setQ(q.id, { required: e.target.checked })} /> Required</label>
+          </li>
+        ))}
+      </ol>
+      <div className="row add-q">
+        {KINDS.map((k) => <button key={k} type="button" className="btn btn-sm" onClick={() => update({ questions: [...s.questions, qn(k, '', { choices: hasChoices(k) ? ['Option 1', 'Option 2'] : [] })] })}>+ {KIND_LABEL[k]}</button>)}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Take ---------- */
+function QuestionInput({ q, value, onChange, error, n }: { q: Question; value: Answer; onChange: (a: Answer) => void; error?: string; n: number }) {
+  const hid = `${q.id}-h`, eid = `${q.id}-e`;
+  const desc = [q.help && hid, error && eid].filter(Boolean).join(' ') || undefined;
+  const legend = <legend className="q-title">{n}. {q.title || 'Untitled question'}{q.required && <span className="req" aria-label="required"> *</span>}</legend>;
+  const scale = (vals: number[], low: string, high: string) => (
+    <div className="scale-pick" role="radiogroup" aria-label={q.title} aria-describedby={desc}>
+      {vals.map((v) => <label key={v} className={`pill ${value === v ? 'on' : ''}`}><input type="radio" name={q.id} className="sr-only" checked={value === v} onChange={() => onChange(v)} />{v}</label>)}
+      <span className="scale-ends small muted"><span>{low}</span><span>{high}</span></span>
+    </div>
+  );
+  return (
+    <fieldset className={`card stack take-q ${error ? 'has-error' : ''}`} aria-invalid={!!error}>
+      {legend}
+      {q.help && <p className="small muted" id={hid}>{q.help}</p>}
+      {q.kind === 'short' && <input aria-label={q.title} aria-describedby={desc} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} maxLength={240} />}
+      {q.kind === 'long' && <textarea aria-label={q.title} aria-describedby={desc} rows={4} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />}
+      {(q.kind === 'single' || q.kind === 'yesno') && (
+        <div className="choices" role="radiogroup" aria-label={q.title} aria-describedby={desc}>
+          {(q.kind === 'yesno' ? ['Yes', 'No'] : q.choices).map((c) => <label key={c} className="check"><input type="radio" name={q.id} checked={value === c} onChange={() => onChange(c)} /> {c}</label>)}
+        </div>
+      )}
+      {q.kind === 'multi' && (
+        <div className="choices" aria-describedby={desc}>
+          {q.choices.map((c) => { const arr = (value as string[]) ?? []; return <label key={c} className="check"><input type="checkbox" checked={arr.includes(c)} onChange={(e) => onChange(e.target.checked ? [...arr, c] : arr.filter((x) => x !== c))} /> {c}</label>; })}
+        </div>
+      )}
+      {q.kind === 'rating' && scale([1, 2, 3, 4, 5], 'Not at all', 'Extremely')}
+      {q.kind === 'nps' && scale([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'Not likely', 'Very likely')}
+      {error && <p className="error-text" id={eid}>{error}</p>}
+    </fieldset>
+  );
+}
+
+function Take({ store, setStore, navigate, id }: Ctx & { id: string }) {
+  const s = store.surveys.find((x) => x.id === id);
+  const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  if (!s) return <EmptyState title="Survey not found" actions={<a className="btn btn-primary" href="#/surveys">Back</a>} />;
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const errs = validateResponse(s!, answers);
+    setErrors(errs);
+    if (Object.keys(errs).length) {
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('.take-q.has-error input, .take-q.has-error textarea')?.focus());
+      return;
+    }
+    if (!s!.open) return navigate(`/survey/${s!.id}/thanks?preview`);
+    const clean = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, typeof v === 'string' ? v.trim() || null : v]));
+    setStore({ ...store, responses: [...store.responses, { id: uid('resp'), surveyId: s!.id, at: new Date().toISOString(), answers: clean }] });
+    navigate(`/survey/${s!.id}/thanks`);
+  }
+  const done = s.questions.filter((q) => { const a = answers[q.id]; return a != null && a !== '' && !(Array.isArray(a) && !a.length); }).length;
+  return (
+    <form className="take" onSubmit={submit} noValidate>
+      {!s.open && <Notice kind="info">Preview — this survey is a draft, so answers won’t be saved.</Notice>}
+      <header className="take-head">
+        <p className="eyebrow">Survey</p>
+        <h1>{s.title}</h1>
+        {s.intro && <p className="lead-sm">{s.intro}</p>}
+        <div className="progress" role="progressbar" aria-label="Questions answered" aria-valuemin={0} aria-valuemax={s.questions.length} aria-valuenow={done}><span style={{ width: `${(done / Math.max(1, s.questions.length)) * 100}%` }} /></div>
+        <p className="small muted">{done} of {s.questions.length} answered · <span aria-hidden="true">*</span> required</p>
+      </header>
+      {Object.keys(errors).length > 0 && <Notice kind="error">{Object.keys(errors).length === 1 ? 'One question needs' : `${Object.keys(errors).length} questions need`} attention.</Notice>}
+      <div className="stack">
+        {s.questions.map((q, i) => <QuestionInput key={q.id} q={q} n={i + 1} value={answers[q.id] ?? null} error={errors[q.id]} onChange={(a) => { setAnswers({ ...answers, [q.id]: a }); if (errors[q.id]) setErrors(({ [q.id]: _gone, ...rest }) => rest); }} />)}
+      </div>
+      <div className="row"><button className="btn btn-primary btn-lg" type="submit">{s.open ? 'Submit' : 'Check answers'}</button></div>
+    </form>
+  );
+}
+
+function Thanks({ store, id, preview }: Ctx & { id: string; preview: boolean }) {
+  const s = store.surveys.find((x) => x.id === id);
+  return (
+    <EmptyState title={preview ? 'Answers look good' : 'Thank you — response saved'} actions={<>{s && <a className="btn btn-primary" href={`#/survey/${s.id}/take`}>{preview ? 'Back to preview' : 'Take it again (next person)'}</a>}{s && <a className="btn" href={`#/survey/${s.id}/results`}>See results</a>}</>}>
+      {preview ? 'This was a preview, so nothing was saved.' : `${s?.title ?? 'The survey'} now has ${store.responses.filter((r) => r.surveyId === s?.id).length} responses.`}
+    </EmptyState>
+  );
+}
+
+/* ---------- Results ---------- */
+function Results({ store, setStore, id }: Ctx & { id: string }) {
+  const s = store.surveys.find((x) => x.id === id);
+  const [flash, setFlash] = useFlash();
+  if (!s) return <EmptyState title="Survey not found" actions={<a className="btn btn-primary" href="#/surveys">Back</a>} />;
+  const mine = store.responses.filter((r) => r.surveyId === s.id);
+  const comp = completion(s, store.responses);
+  const exportCSV = () => { const { headers, rows } = responseRows(s, store.responses); downloadText(`${s.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-responses.csv`, toCSV(headers, rows), 'text/csv'); };
+  return (
+    <div className="stack">
+      <PageHead eyebrow={<><a href="#/surveys">Surveys</a> / Results</>} title={<>{s.title}</>} description={`${mine.length} response${mine.length === 1 ? '' : 's'}${mine.length ? ` · latest ${formatDay(mine.map((r) => r.at).sort().at(-1)!.slice(0, 10))}` : ''}`}
+        actions={<><button type="button" className="btn" disabled={!mine.length} onClick={exportCSV}>Export CSV</button><a className="btn btn-primary" href={`#/survey/${s.id}/take`}>Add a response</a></>} />
+      {flash && <Notice kind={flash.kind} onDismiss={() => setFlash(null)}>{flash.text}</Notice>}
+      {mine.length === 0 ? <EmptyState title="No responses yet" actions={<a className="btn btn-primary" href={`#/survey/${s.id}/take`}>{s.open ? 'Take the survey' : 'Preview the survey'}</a>}>{s.open ? 'Responses appear here as soon as someone submits.' : 'Open the survey from the builder to start collecting.'}</EmptyState> : (
+        <>
+          {s.questions.map((q, i) => (
+            <section key={q.id} className="card stack" aria-labelledby={`r-${q.id}`} data-reveal>
+              <div className="card-title-row"><h2 id={`r-${q.id}`} className="h3">{i + 1}. {q.title}</h2><span className="small muted">{comp[i].answered} of {comp[i].total} answered</span></div>
+              <SummaryView q={q} s={summarize(q, store.responses.filter((r) => r.surveyId === s.id))} />
+            </section>
+          ))}
+          <div><button type="button" className="btn btn-ghost btn-sm" onClick={() => { if (window.confirm(`Delete all ${mine.length} responses to “${s.title}”?`)) { setStore({ ...store, responses: store.responses.filter((r) => r.surveyId !== s.id) }); setFlash({ kind: 'success', text: 'Responses deleted.' }); } }}>Delete all responses</button></div>
+        </>
+      )}
+    </div>
+  );
+}
