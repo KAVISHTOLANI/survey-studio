@@ -2,7 +2,7 @@
 
 Build a short survey from seven question types, collect responses on this device (a workshop laptop, a kiosk, or testing before you send a real survey), and read the results question by question — averages, distributions, an NPS score and every written comment — with CSV export.
 
-**Live demo:** [https://survey-studio.vercel.app/](https://survey-studio.vercel.app/) — runs entirely in your browser; demo data is fictional and labelled.
+**Live demo:** [https://survey-studio-app.vercel.app/](https://survey-studio-app.vercel.app/) — runs entirely in your browser; demo data is fictional and labelled.
 
 ![Landing with demo results](docs/landing.png)
 
